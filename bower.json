@@ -1,0 +1,25 @@
+{
+  "name": "SyncItBootstrap",
+  "version": "0.8.0",
+  "authors": [
+    "Matthew Forrester <syncitbootstrap@speechmarks.com>"
+  ],
+  "description": "Bootstrap app for SyncIt",
+  "main": "app.js",
+  "keywords": [
+    "SyncIt"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/forbesmyester/syncit-bootstrap",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "public/vendor-bower",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "jquery": "~2.1.1"
+  }
+}

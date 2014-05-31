@@ -1,0 +1,25 @@
+doctype html
+html(lang="en")
+	head
+		title SyncItBootstrap
+		meta(charset="utf-8")
+
+	body(data-persist-data=persistData?"1":"0")
+		h1 SyncItBootstrap
+
+		div
+			strong Datasets:
+			span(id="datasets")
+		hr
+
+		ul(id="list")
+
+		form(id="addItemForm" style="display:none")
+			input(type="text", id="item")
+			button(id="addItem") Add Item
+
+		a(href="#", id="newList") New List
+		
+
+	script(src="/vendor-bower/jquery/dist/jquery.js")
+	script(src="/js/App.js")
