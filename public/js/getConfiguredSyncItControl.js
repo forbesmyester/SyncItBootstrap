@@ -154,7 +154,7 @@ module.exports = (function(
 		this._syncItControl = new SyncItControl(
 			this.getSyncIt(),
 			getEventSourceMonitor(),
-			stateConfig,
+			storeSequenceId,
 			downloadDatasetFunction,
 			uploadChangeFunction,
 			conflictResolutionFunction,
