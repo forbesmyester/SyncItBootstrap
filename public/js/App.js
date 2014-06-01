@@ -191,7 +191,7 @@ if (dataset) {
 
 }(
 	$,
-	require('./takeLatestConflictResolutionFunction.js'),
-	require('./getDeviceId.js'),
-	require('./getConfiguredSyncItControl')
+	require('./takeLatestConflictResolutionFunction'),
+	require('./getDeviceId'),
+	require('./SyncItFactory')
 ));
