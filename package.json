@@ -1,6 +1,6 @@
 {
   "name": "syncit-bootstrap",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "scripts": {
     "start": "node app.js",
     "test": "mocha test/*"
@@ -18,7 +18,7 @@
     "mout": "^0.9.1",
     "reqwest": "^1.1.0",
     "sync-it": "^0.9.14",
-    "syncit-control": "^0.9.14",
+    "syncit-control": "^0.9.15",
     "syncit-server": "^0.9.5",
     "transition-state": "^0.9.3",
     "when": "~2.8.0"
