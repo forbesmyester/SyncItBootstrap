@@ -126,9 +126,9 @@ var loadDataset = function(newDataset) {
 // hash and then use loadDataset to refresh the whole screen.
 $('#newList').bind('click', function(evt) {
 	evt.preventDefault();
-	dataset = syncItFactory.getTLIdEncoderDecoder().encode();
+	newDataset = syncItFactory.getTLIdEncoderDecoder().encode();
 	window.location.href = window.location.href.replace(/#.*/, '') + '#' + dataset;
-	loadDataset(dataset);
+	loadDataset(newDataset);
 });
 
 // Clicking on remove next to an item (items are stored in Datakeys) will fire
