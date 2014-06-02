@@ -107,8 +107,9 @@ var refreshListList = function() {
 // Given a name of a dataset, load all the data from SyncIt and completely
 // redraw the screen.
 var loadDataset = function(newDataset) {
-	refreshListList();
 	dataset = newDataset;
+	refreshListList();
+	window.location.href = window.location.href.replace(/#.*/, '') + '#' + dataset;
 	syncItControl.addMonitoredDataset(dataset);
 	syncItControl.connect();
 	$('#addItemForm').show();
@@ -126,9 +127,7 @@ var loadDataset = function(newDataset) {
 // hash and then use loadDataset to refresh the whole screen.
 $('#newList').bind('click', function(evt) {
 	evt.preventDefault();
-	newDataset = syncItFactory.getTLIdEncoderDecoder().encode();
-	window.location.href = window.location.href.replace(/#.*/, '') + '#' + dataset;
-	loadDataset(newDataset);
+	loadDataset(syncItFactory.getTLIdEncoderDecoder().encode());
 });
 
 // Clicking on remove next to an item (items are stored in Datakeys) will fire
