@@ -54,10 +54,7 @@ var
 // reconnect automatically. For more documentation see
 // https://github.com/forbesmyester/SyncItControl
 syncItControl.on('entered-state', function(state) {
-	if (console && console.log) {
-		console.log("State: " + state);
-	}
-	if (state === 'disconnected') {
+	if (state === 'DISCONNECTED') {
 		setTimeout(function() {
 			syncItControl.connect();
 		}, 10000);
@@ -90,7 +87,7 @@ var refreshListList = function() {
 	var $datasets = $('#datasets');
 	$datasets.html('');
 	syncIt.getDatasetNames(function(err, datasets) {
-		if (datasets.indexOf(dataset) === -1) {
+		if (dataset.length && (datasets.indexOf(dataset) === -1)) {
 			datasets.push(dataset);
 		}
 		$datasets.append($.map(datasets, function(name) {
@@ -110,7 +107,7 @@ var loadDataset = function(newDataset) {
 	dataset = newDataset;
 	refreshListList();
 	window.location.href = window.location.href.replace(/#.*/, '') + '#' + dataset;
-	syncItControl.addMonitoredDataset(dataset);
+	syncItControl.addDatasets([dataset]);
 	syncItControl.connect();
 	$('#addItemForm').show();
 	$('#list').html('');
@@ -174,10 +171,18 @@ syncIt.listenForFed(function(qDataset, qDatakey, queueitem /*, newStoreRecord */
 	if (qDataset !== dataset) {
 		return false;
 	}
+
+	// If the operation was remove, then remove it.
 	if (queueitem.o === 'remove') {
 		return removeItem(qDatakey);
 	}
+
+	// otherwise add it.
 	addItem(qDatakey, queueitem.u.name);
+});
+
+syncItControl.on('entered-state', function(state) {
+	// console.log("STATE: " + state);
 });
 
 // If we have a dataset load it, otherwise just give a list of datasets and the

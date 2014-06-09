@@ -21,19 +21,23 @@ var express = require('express'),
 	app = express(),
 	browserify = require('browserify-middleware'),
 	mongoskin = require('mongoskin'),
-	SseCommunication = require('./lib/SseCommunication/Simple'),
+	SseCommunication = require('sse-communication/Simple'),
 	ReferenceServer = require('syncit-server/ReferenceServer'),
 	ServerPersistMongodb = require('syncit-server/ServerPersist/Mongodb'),
 	ServerPersistMemoryAsync = require('syncit-server/ServerPersist/MemoryAsync'),
 	http = require('http'),
 	sseCommunication = new SseCommunication(),
+	setDeviceIdMiddleware = function(req, res, next) {
+		"use strict";
+		req.deviceId = req.params.deviceId;
+		next(null);
+	},
 	referenceServer = (function() {
-
 		"use strict";
 
 		if (!appConfig.persistData) {
 			return new ReferenceServer(
-				function(req) { return req.params.deviceId; },
+				function(req) { return req.deviceId; },
 				new ServerPersistMemoryAsync(),
 				sseCommunication
 			);
@@ -55,7 +59,7 @@ var express = require('express'),
 			);
 
 		return new ReferenceServer(
-			function(req) { return req.params.deviceId; },
+			function(req) { return req.deviceId; },
 			dbPersistance,
 			sseCommunication
 		);
@@ -139,7 +143,7 @@ app.get('/', function(req, res) {
 	res.render('front', {persistData: appConfig.persistData});
 });
 
-app.post('/syncit/:deviceId', function(req, res, next) {
+app.post('/syncit/:deviceId', setDeviceIdMiddleware, function(req, res, next) {
 	"use strict";
 	referenceServer.push(req, function(err, status, data) {
 		if (err) { return next(err); }
@@ -156,7 +160,23 @@ var isDatasetInvalidOrAlreadyUsed = function(dataset, next) {
 	});
 };
 
-app.get('/sync/:deviceId', referenceServer.sync.bind(referenceServer));
+app.get(
+	'/sync/:deviceId',
+	setDeviceIdMiddleware,
+	referenceServer.sync.bind(referenceServer),
+	function(req, res, next) {
+		"use strict";
+		referenceServer.getMultiQueueitems(req, function(err, status, data) {
+			if (err) { return next(err); }
+			if (status !== 'ok') {
+				return res.write(SseCommunication.formatMessage(
+					'status-information', status
+				));
+			}
+			res.write(SseCommunication.formatMessage('download', data));
+		});
+	}
+);
 
 var serverHttp = null;
 

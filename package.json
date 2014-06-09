@@ -17,6 +17,7 @@
     "mongoskin": "^1.4.1",
     "mout": "^0.9.1",
     "reqwest": "^1.1.0",
+    "sse-communication": "^0.9.0",
     "sync-it": "^0.9.14",
     "syncit-control": "^0.9.15",
     "syncit-server": "^0.9.5",

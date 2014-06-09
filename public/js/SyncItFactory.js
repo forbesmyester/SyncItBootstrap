@@ -11,7 +11,6 @@ module.exports = (function(
 	SyncItControl,
 	EventSourceMonitor,
 	SyncLocalStorage,
-	StoreSequenceId,
 	req
 ) {
 
@@ -70,28 +69,19 @@ module.exports = (function(
 		var getEventSourceMonitor = function() {
 
 			var getUrl = function(datasets) {
-				var url = baseUrl + '/sync/' + deviceId;
-				if (options && options.hasOwnProperty('eventSourceUrl')) {
-					url = options.eventSourceUrl;
-				}
-				url = url + '?dataset[]=';
-				return url + datasets.join(
-					'&dataset[]='
-				);
+				return baseUrl + '/sync/' + deviceId + '?' + datasets;
 			};
 
-			var factory = function(dotSeperatedDatasets) {
+			var factory = function(urlEncodedDatasets) {
 
-				var datasets = dotSeperatedDatasets.split('.');
-
-				if (!datasets.length) {
+				if (!urlEncodedDatasets.length) {
 					throw new Error(
 						"getConfiguredSyncItControl -> eventSourceMonitor: " +
 						"Was expecting one or more datasets"
 					);
 				}
 
-				return new window.EventSource(getUrl(datasets));
+				return new window.EventSource(getUrl(urlEncodedDatasets));
 
 			};
 
@@ -104,11 +94,6 @@ module.exports = (function(
 			'syncit-seq',
 			JSON.stringify,
 			JSON.parse
-		);
-
-		var storeSequenceId = new StoreSequenceId(
-			stateConfig,
-			this.getTLIdEncoderDecoder().sort
 		);
 
 		var downloadDatasetFunction = function(dataset, fromSeqId, next) {
@@ -147,6 +132,13 @@ module.exports = (function(
 			});
 		};
 
+		var controlAsyncLocalStorage = new AsyncLocalStorage(
+			this._getTheLocalStorage(),
+			'syncit-seq',
+			JSON.stringify,
+			JSON.parse
+		);
+
 		if (options && options.hasOwnProperty('uploadChangeFunction')) {
 			uploadChangeFunction = options.uploadChangeFunction;
 		}
@@ -154,11 +146,9 @@ module.exports = (function(
 		this._syncItControl = new SyncItControl(
 			this.getSyncIt(),
 			getEventSourceMonitor(),
-			storeSequenceId,
-			downloadDatasetFunction,
+			controlAsyncLocalStorage,
 			uploadChangeFunction,
-			conflictResolutionFunction,
-			[]
+			conflictResolutionFunction
 		);
 
 		return this._syncItControl;
@@ -177,9 +167,8 @@ module.exports = (function(
 	require('sync-it/dontListLocallyDeletedDatakeys'),
 	require('./syncItLoadAllKeysInDataset.js'),
 
-	require('syncit-control'),
+	require('syncit-control/Control'),
 	require('eventsource-monitor'),
 	require('sync-it/SyncLocalStorage'),
-	require('syncit-control/StoreSequenceId'),
 	require('reqwest')
 ));
