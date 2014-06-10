@@ -10,8 +10,7 @@ module.exports = (function(
 
 	SyncItControl,
 	EventSourceMonitor,
-	SyncLocalStorage,
-	req
+	SyncLocalStorage
 ) {
 
 	"use strict";
@@ -60,17 +59,13 @@ module.exports = (function(
 		syncItLoadAllKeysInDataset(syncIt, dataset, next);
 	};
 
-	Factory.prototype.getSyncItControl = function(deviceId, conflictResolutionFunction, options) {
+	Factory.prototype.getSyncItControl = function(deviceId, uploadChangeFunction, getEventSourceUrl, conflictResolutionFunction, options) {
 
 		if (this._syncItControl) { return this._syncItControl; }
 
 		var baseUrl = window.location.origin;
 
 		var getEventSourceMonitor = function() {
-
-			var getUrl = function(datasets) {
-				return baseUrl + '/sync/' + deviceId + '?' + datasets;
-			};
 
 			var factory = function(urlEncodedDatasets) {
 
@@ -81,7 +76,7 @@ module.exports = (function(
 					);
 				}
 
-				return new window.EventSource(getUrl(urlEncodedDatasets));
+				return new window.EventSource(getEventSourceUrl(urlEncodedDatasets));
 
 			};
 
@@ -96,52 +91,12 @@ module.exports = (function(
 			JSON.parse
 		);
 
-		var downloadDatasetFunction = function(dataset, fromSeqId, next) {
-			req({
-				url: baseUrl + '/syncit/sequence/' + dataset + (fromSeqId === null ? '' : '/' + fromSeqId),
-				type: 'json',
-				method: 'get',
-				error: function(e) {
-					next(e);
-				},
-				success: function(data) {
-					next(null, data.queueitems, data.seqId);
-				}
-			});
-		};
-
-		if (options && options.hasOwnProperty('downloadDatasetFunction')) {
-			downloadDatasetFunction = options.downloadDatasetFunction;
-		}
-
-		var uploadChangeFunction = function(queueitem, next) {
-			req({
-				url: baseUrl + '/syncit/' + deviceId,
-				type: 'json',
-				method: 'post',
-				data: queueitem,
-				error: function(xmlHttpRequest) {
-					if (xmlHttpRequest.status == 303) {
-						return next(null, null);
-					}
-					next(xmlHttpRequest);
-				},
-				success: function(resp) {
-					next(null, resp.sequence.replace(/.*\//,''));
-				}
-			});
-		};
-
 		var controlAsyncLocalStorage = new AsyncLocalStorage(
 			this._getTheLocalStorage(),
 			'syncit-seq',
 			JSON.stringify,
 			JSON.parse
 		);
-
-		if (options && options.hasOwnProperty('uploadChangeFunction')) {
-			uploadChangeFunction = options.uploadChangeFunction;
-		}
 
 		this._syncItControl = new SyncItControl(
 			this.getSyncIt(),
@@ -169,6 +124,5 @@ module.exports = (function(
 
 	require('syncit-control/Control'),
 	require('eventsource-monitor'),
-	require('sync-it/SyncLocalStorage'),
-	require('reqwest')
+	require('sync-it/SyncLocalStorage')
 ));

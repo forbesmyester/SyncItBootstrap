@@ -2,7 +2,8 @@ module.exports = (function (
 	$,
 	takeLatestConflictResolutionFunction,
 	getDeviceId,
-	SyncItFactory
+	SyncItFactory,
+	req
 ){
 
 /* global window: false, document: false */
@@ -33,6 +34,32 @@ var
 	// the documentation at https://github.com/forbesmyester
 	syncIt = syncItFactory.getSyncIt(deviceId),
 
+	// This function will be used for uploading individual queueitems
+	uploadChangeFunction = function(queueitem, next) {
+		req({
+			url: '/syncit/' + deviceId,
+			type: 'json',
+			method: 'post',
+			data: queueitem,
+			error: function(xmlHttpRequest) {
+				if (xmlHttpRequest.status == 303) {
+					return next(null, null);
+				}
+				next(xmlHttpRequest);
+			},
+			success: function(resp) {
+				next(null, resp.sequence.replace(/.*\//,''));
+			}
+		});
+	},
+
+	// This will take a url encoded set of datasets in the form
+	// dataset[datasetname]=sequenceId&dataset[datasetname]=sequenceid
+	// and transform it into a URL.
+	getEventSourceUrl = function(urlEncodedDatasets) {
+		return '/sync/' + deviceId + '?' + urlEncodedDatasets;
+	},
+
 	// SyncItControl knows about the above instance of SyncIt and also knows
 	// how to communicate with the bundled Node.JS backend through EventSource,
 	// GET and POST HTTP requests. It makes using SyncIt easy but it is not
@@ -40,6 +67,8 @@ var
 	// be a relatively simple job.
 	syncItControl = syncItFactory.getSyncItControl(
 		deviceId,
+		uploadChangeFunction,
+		getEventSourceUrl,
 		takeLatestConflictResolutionFunction
 	),
 
@@ -197,5 +226,6 @@ if (dataset) {
 	$,
 	require('./takeLatestConflictResolutionFunction'),
 	require('./getDeviceId'),
-	require('./SyncItFactory')
+	require('./SyncItFactory'),
+	require('reqwest')
 ));
