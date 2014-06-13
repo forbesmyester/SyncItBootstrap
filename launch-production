@@ -3,4 +3,4 @@
 npm install
 
 node_modules/.bin/browserify -s app -t reactify public/js/App.js | node_modules/.bin/uglifyjs -m -c > public/js/App.bin.js
-NODE_ENV=production node app
+NODE_ENV=${NODE_ENV} node app.js
