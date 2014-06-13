@@ -1,25 +1,32 @@
 doctype html
-html(lang="en")
+html(lang="en", manifest=production?"/offline.manifest.appcache":undefined)
 	head
-		title SyncItBootstrap
+		title React • TodoMVC
+		meta(http-equiv="X-UA-Compatible", content="IE=Edge")
 		meta(charset="utf-8")
+		meta(content='True', name='HandheldFriendly')
+		meta(name="viewport", content="width=device-width, initial-scale=1, maximum-scale=1")
+		link(rel="stylesheet", href="/css/main.css")
+		link(rel="stylesheet", href="/css/front.css")
 
-	body(data-persist-data=persistData?"1":"0")
-		h1 SyncItBootstrap
+	body(data-in-production=production?1:0, data-persist-data=persistData?1:0)
+		h1 SyncItTodoMvc
 
-		div
-			strong Datasets:
-			span(id="datasets")
-		hr
+		div#lists
 
-		ul(id="list")
+		form(method="post")
+			input(type="submit", value="Start a new Todo")
 
-		form(id="addItemForm" style="display:none")
-			input(type="text", id="item")
-			button(id="addItem") Add Item
+		#renameListPopup
+		#mailtoPopup
+		#okCancelPopup
+		#updateNotifierPopup
+		#loadingPopup
 
-		a(href="#", id="newList") New List
-		
-
-	script(src="/vendor-bower/jquery/dist/jquery.js")
-	script(src="/js/App.js")
+	script(src="/vendor-bower/react/react-with-addons.min.js")
+	if production
+		script(src="/js/App.bin.js")
+	else
+		script(src="/js/App.js")
+	script.
+		app.front();

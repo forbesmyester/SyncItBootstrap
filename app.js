@@ -1,70 +1,65 @@
 /**
  * Module dependencies.
  */
-var appConfig = {
-	http: { port: 3000 },
-	databases: {
-		main: {
-			port: 27017,
-			host: '192.168.24.11',
-			name: 'syncitbootstrap'
-		}
-	},
-	syncit: {
-		data_collection: 'syncit'
-	},
-	persistData: true,
-};
-
 var express = require('express'),
 	path = require('path'),
 	app = express(),
+	generateNewDatasetName = require('./lib/generateNewDatasetName'),
+	fs = require('fs'),
+	appConfig = require('ini').parse(fs.readFileSync('./config.ini', 'utf-8')),
 	browserify = require('browserify-middleware'),
 	mongoskin = require('mongoskin'),
 	SseCommunication = require('sse-communication/Simple'),
 	ReferenceServer = require('syncit-server/ReferenceServer'),
 	ServerPersistMongodb = require('syncit-server/ServerPersist/Mongodb'),
+	fixNoFlightCorsRequestBody = require('./lib/fixNoFlightCorsRequestBody'),
+	generateRandomString = require('./lib/generateRandomString.js'),
 	ServerPersistMemoryAsync = require('syncit-server/ServerPersist/MemoryAsync'),
 	http = require('http'),
+	https = require('https'),
 	sseCommunication = new SseCommunication(),
+	syncItServerPersist = (function() {
+		"use strict";
+		if (!parseInt(appConfig.syncit.persist_data, 10)) {
+			return new ServerPersistMemoryAsync();
+		}
+		var mongoskinConnection = mongoskin.db(
+			'mongodb://' +
+				appConfig.databases.main.host + ':' +
+				appConfig.databases.main.port + '/' +
+				appConfig.databases.main.name,
+			{w:true}
+		);
+		return new ServerPersistMongodb(
+			function(v) { return JSON.parse(JSON.stringify(v)); },
+			mongoskinConnection,
+			mongoskin.ObjectID,
+			appConfig.syncit.data_collection,
+			function() {}
+		);
+	}()),
 	setDeviceIdMiddleware = function(req, res, next) {
 		"use strict";
 		req.deviceId = req.params.deviceId;
 		next(null);
 	},
-	referenceServer = (function() {
+	referenceServer = new ReferenceServer(
+		function(req) {
+			"use strict";
+			return req.deviceId;
+		},
+		syncItServerPersist,
+		sseCommunication
+	),
+	allowCors = function(req, res, next) {
 		"use strict";
-
-		if (!appConfig.persistData) {
-			return new ReferenceServer(
-				function(req) { return req.deviceId; },
-				new ServerPersistMemoryAsync(),
-				sseCommunication
-			);
+		res.header('Access-Control-Allow-Origin', '*');
+		res.header('Access-Control-Allow-Methods', 'GET,POST');
+		if (req.method == 'OPTIONS') {
+			return res.send(200);
 		}
-
-		var mongoskinConnection = mongoskin.db(
-				'mongodb://' +
-					appConfig.databases.main.host + ':' +
-					appConfig.databases.main.port + '/' +
-					appConfig.databases.main.name,
-				{w:true}
-			),
-			dbPersistance = new ServerPersistMongodb(
-				function(v) { return JSON.parse(JSON.stringify(v)); },
-				mongoskinConnection,
-				mongoskin.ObjectID,
-				appConfig.syncit.data_collection,
-				function() {}
-			);
-
-		return new ReferenceServer(
-			function(req) { return req.deviceId; },
-			dbPersistance,
-			sseCommunication
-		);
-
-	}());
+		next();
+	};
 
 // all environments
 (function(mode) {
@@ -78,9 +73,21 @@ var express = require('express'),
 	app.use(express.json());
 	app.use(express.urlencoded());
 	app.use(express.methodOverride());
+	app.use(allowCors);
 	app.use(app.router);
 
-	app.get('/js/App.js', browserify('./public/js/App.js'));
+	if ( mode !== 'production') {
+		app.get(
+			'/js/App.js',
+			browserify(
+				'./public/js/App.js',
+				{
+					transform: require('reactify'),
+					standalone: 'app'
+				}
+			)
+		);
+	}
 
 	app.use(express.static(path.join(__dirname, 'public')));
 
@@ -138,12 +145,26 @@ app.get('/syncit/change/:s/:k/:v', function(req, res, next) {
 	);
 });
 
+var getStandardTemplateData = function() {
+	"use strict";
+	return {
+		title: 'Express',
+		production: ( app.get('env') === 'production' ? true : false),
+		persistData: parseInt(appConfig.syncit.persist_data, 10) ? true : false
+	};
+};
+
 app.get('/', function(req, res) {
 	"use strict";
-	res.render('front', {persistData: appConfig.persistData});
+	res.render('front', getStandardTemplateData());
 });
 
-app.post('/syncit/:deviceId', setDeviceIdMiddleware, function(req, res, next) {
+app.get('/list', function(req, res) {
+	"use strict";
+	res.render('list', getStandardTemplateData());
+});
+
+app.post('/syncit/:deviceId', fixNoFlightCorsRequestBody, setDeviceIdMiddleware, function(req, res, next) {
 	"use strict";
 	referenceServer.push(req, function(err, status, data) {
 		if (err) { return next(err); }
@@ -154,11 +175,19 @@ app.post('/syncit/:deviceId', setDeviceIdMiddleware, function(req, res, next) {
 var isDatasetInvalidOrAlreadyUsed = function(dataset, next) {
 	"use strict";
 	if (dataset.match(/^[0-9]/)) { return next(null, true); }
-	dbPersistance.getQueueitems(dataset, null, function(err, status, queueitems) {
+	syncItServerPersist.getQueueitems(dataset, null, function(err, status, queueitems) {
 		if (err) { return next(err); }
 		next(null, queueitems.length > 0 ? true : false);
 	});
 };
+
+app.post('/', function(req, res, next) {
+	"use strict";
+	generateNewDatasetName(generateRandomString.bind(this, 12), isDatasetInvalidOrAlreadyUsed, function(e, listId) {
+		if (e) { return next(e); }
+		res.redirect('/list#/' + listId);
+	});
+});
 
 app.get(
 	'/sync/:deviceId',
@@ -178,8 +207,49 @@ app.get(
 	}
 );
 
-var serverHttp = null;
+app.get('/offline.manifest.appcache', function(req, res) {
+	"use strict";
+	if (app.get('env') != 'production') {
+		return res.send("CACHE MANIFEST\nNETWORK:\n*");
+	}
+	res.set('Content-Type', 'text/cache-manifest');
+	var data = [
+		'CACHE MANIFEST',
+		'# 201406011136',
+		'CACHE:',
+		'/',
+		'/list',
+		'/css/main.css',
+		'/css/front.css',
+		'/css/list.css',
+		'/vendor-bower/todomvc-common/base.css',
+		'/vendor-bower/todomvc-common/bg.png',
+		'/vendor-bower/react/react-with-addons.min.js',
+		'/js/App.bin.js',
+		'',
+		'NETWORK:',
+		'*'
+	];
+	res.send(data.join("\n"));
+});
 
+var serverHttp = null,
+	serverHttps = null;
+
+if (app.get('env') === 'production') {
+	serverHttps = https.createServer(
+		{
+			key: fs.readFileSync(appConfig.https.key),
+			cert: fs.readFileSync(appConfig.https.cert),
+		},
+		app
+	);
+	serverHttps.listen(appConfig.https.port, function(){
+		"use strict";
+		/* global console: false */
+		console.log('Express HTTPS server listening on port ' + appConfig.https.port);
+	});
+}
 serverHttp = http.createServer(app);
 serverHttp.listen(appConfig.http.port, function(){
 	"use strict";

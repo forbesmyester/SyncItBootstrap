@@ -1,0 +1,5 @@
+#!/bin/sh
+if [ ! -d "README.bin/img" ]; then
+  mkdir -p README.bin/img
+fi
+cat README.img/architecture_diagram.dot | dot  -Gdpi=52  -Tpng:cairo:cairo  > README.bin/img/architecture_diagram.png

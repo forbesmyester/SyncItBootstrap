@@ -1,9 +1,16 @@
 module.exports = (function (
-	$,
-	takeLatestConflictResolutionFunction,
-	getDeviceId,
-	SyncItFactory,
-	req
+	React, TodoListList,
+	RenameListPopup, OkCancelPopup,
+	TodoList, Constants,
+	syncItLoadAllKeysInDataset, rekey,
+	getDeviceId, SyncItFactory,
+	objectMap, routerLib,
+	browserLights, UpdateNotifierPopup,
+	getChangeLog /*, FakeLocalStorage */,
+	LoadingPopup, MailtoPopup,
+	takeLatestConflictResolutionFunction, req,
+	whenCallback, when,
+	arrayMap, syncItCallbackToPromise
 ){
 
 /* global window: false, document: false */
@@ -16,6 +23,22 @@ var
 	// the jade template from the appConfig variable right at the top of the
 	// servers app.js
 	persistData = parseInt(document.body.dataset.persistData, 10) ? true : false,
+
+	// Whether we are in production or not. This will switch to using HTTPS for
+	// API connections.
+	inProduction = (function() {
+		/* global document: false */
+		return parseInt(document.body.dataset.inProduction, 10) ? true : false;
+	}()),
+
+	// This is the URL that is used for connections, in this case we are
+	// going to do the API stuff across HTTPS but still keep the UI as
+	// HTTP, so we're going to switch protocols here.
+	baseUrl = (function() {
+		/* global window: false */
+		if (!inProduction) { return ''; }
+		return 'https://' + window.location.hostname;
+	}()),
 
 	// This is a Factory for all things SyncIt.
 	syncItFactory = new SyncItFactory(persistData),
@@ -37,10 +60,11 @@ var
 	// This function will be used for uploading individual queueitems
 	uploadChangeFunction = function(queueitem, next) {
 		req({
-			url: '/syncit/' + deviceId,
+			url: baseUrl + '/syncit/' + deviceId,
 			type: 'json',
 			method: 'post',
-			data: queueitem,
+			crossOrigin: true,
+			data: JSON.stringify(queueitem),
 			error: function(xmlHttpRequest) {
 				if (xmlHttpRequest.status == 303) {
 					return next(null, null);
@@ -72,10 +96,95 @@ var
 		takeLatestConflictResolutionFunction
 	),
 
+	// Get a storage area that we can use for the app.
+	asyncLocalStorage = syncItFactory.getAsyncLocalStorage('syncittodomvc'),
+
 	// For getting the dataset name we are just going to take whatever is after the
 	// "#" in the URL. If there is none we set it to '' and it will disable most
 	// of the functionality.
-	dataset = window.location.hash.length ? window.location.hash.substr(1) : '';
+	dataset = window.location.hash.length ? window.location.hash.substr(1) : '',
+
+	// Compares the version that the user was registered as having with the
+	// one we have just loaded and displays a change log for the the user.
+	changesForUser = (function() {
+		var versionData = {};
+
+		return getChangeLog(
+			versionData,
+			window.localStorage.getItem('_version')
+		);
+	}()),
+
+	// React components...
+	okCancelPopup = new OkCancelPopup(),
+	loadingPopup = new LoadingPopup(),
+	updateNotifierPopup = new UpdateNotifierPopup()
+	;
+
+(function() {
+	/* global window: false */
+
+	var onUpdateReady = function() {
+		okCancelPopup.setProps({
+			onCancel: function() {},
+			onOk: function() {
+				window.location.reload();
+			}
+		});
+		okCancelPopup.show(
+			'A new version of SyncItTodoMvc has been downloaded and is ready to use. What do you want to do?',
+			'I want to update to the new version',
+			'Continue working'
+		);
+	};
+
+	window.applicationCache.addEventListener('updateready', onUpdateReady);
+	if(window.applicationCache.status === window.applicationCache.UPDATEREADY) {
+		onUpdateReady();
+	}
+
+}());
+
+if (Object.getOwnPropertyNames(changesForUser).length) {
+	updateNotifierPopup.setProps({
+		onOk: function() {
+			window.localStorage.setItem(
+				'_version',
+				Object.getOwnPropertyNames(changesForUser).slice(-1)
+			);
+		}
+	});
+	updateNotifierPopup.show(
+		'New version downloaded, the changes are shown below',
+		changesForUser,
+		'Thanks for letting me know!'
+	);
+}
+
+React.renderComponent(
+	okCancelPopup,
+	(function() {
+		/* global document: false */
+		return document.getElementById('okCancelPopup');
+	}())
+);
+
+React.renderComponent(
+	loadingPopup,
+	(function() {
+		/* global document: false */
+		return document.getElementById('loadingPopup');
+	}())
+);
+
+React.renderComponent(
+	updateNotifierPopup,
+	(function() {
+		/* global document: false */
+		return document.getElementById('updateNotifierPopup');
+	}())
+);
+
 
 // Most of SyncItControl's code is organised like a giant state machine, this
 // made it easier for me to write but it will also give you the ability to have
@@ -96,136 +205,350 @@ var handleErr = function(err) {
 	alert("An Error " + err + " occurred.");
 };
 
-// Given a datakey and a name (of an item) it will paint that item onto the
-// screen. It probably should have already been added to SyncIt at that point.
-var addItem = function(datakey, name) {
-	var a = $('<a>').attr('href', '#').attr('class', 'remove-item').text('[remove]');
-	var li = $('<li>').text(name + ' ').attr('id', 'item-' + datakey);
-	li.append(a);
-	$('#list').append(li);
-};
+var frontApp = function() {
+	var renameListPopup = new RenameListPopup(),
+		mailtoPopup = new MailtoPopup(),
+		lists = {},
+		todoListList
+		;
 
-// Given a datakey, it will remove that item from the screen.
-var removeItem = function(datakey) {
-	$('#' + 'item-' + datakey).remove();
-};
+	React.renderComponent(
+		renameListPopup,
+		(function() {
+			/* global document: false */
+			return document.getElementById('renameListPopup');
+		}())
+	);
 
-// There is a list of all known lists on screen in the `#datasets` element
-// (I am using SyncIt terminology here)... This will redraw that list.
-var refreshListList = function() {
-	var $datasets = $('#datasets');
-	$datasets.html('');
-	syncIt.getDatasetNames(function(err, datasets) {
-		if (dataset.length && (datasets.indexOf(dataset) === -1)) {
-			datasets.push(dataset);
+	React.renderComponent(
+		mailtoPopup,
+		(function() {
+			/* global document: false */
+			return document.getElementById('mailtoPopup');
+		}())
+	);
+
+	syncItCallbackToPromise(
+		syncItControl,
+		syncItControl.getDatasetNamesFromSequenceData,
+		[Constants.SyncIt.Error.OK]
+	).then(
+		function(datasets) {
+			return when.all(
+				arrayMap(datasets, function(dataset) {
+					return whenCallback.call(
+						asyncLocalStorage.getItem.bind(asyncLocalStorage),
+						'_name_' + dataset
+					);
+				})
+			).then(function(names) {
+				return rekey(datasets, names);
+			});
 		}
-		$datasets.append($.map(datasets, function(name) {
-			var a = $('<a>').attr('href', '#' + name).text(name);
-			var s = $('<span>');
-			s.append('[');
-			s.append(a);
-			s.append(']');
-			return s;
-		}));
+	).done(
+		function(newLists) {
+			lists = newLists;
+			todoListList.setProps({lists: lists});
+		},
+		function(err) {
+			handleErr(err);
+		}
+	);
+
+	todoListList = new TodoListList({
+		onDeleteClick: function(dataset) {
+			okCancelPopup.setProps({
+				onCancel: function() {},
+				onOk: function() {
+					syncItControl.purge(dataset, function(err) {
+						if (err) {
+							(function() {
+								/* global alert: false */
+								return alert("Error deleting todo list");
+							}());
+						}
+						delete lists[dataset];
+						todoListList.setProps({ lists: lists });
+						asyncLocalStorage.removeItem('_name_' + dataset, function() { });
+					});
+				}
+			});
+			okCancelPopup.show(
+				'Are you sure you want to delete the ' + lists[dataset] + ' todo list?',
+				'Yes I do',
+				'I wish to keep it'
+			);
+		},
+		onMailtoClick: function(dataset) {
+			mailtoPopup.show(
+				'Send this list to someone else...',
+				'Send the list',
+				'Cancel sending',
+				'A new list!',
+				'Click on the URL: {URL}',
+				window.location.protocol +
+					'//' +
+					window.location.hostname + 
+					'/list#/' +
+					dataset
+			);
+		},
+		onRenameClick: function(dataset) {
+			renameListPopup.setProps({
+				onOk: function(newName) {
+					asyncLocalStorage.setItem('_name_' + dataset, newName, function() {
+						lists[dataset] = newName;
+						todoListList.setProps({ lists: lists });
+					});
+				}
+			});
+			renameListPopup.show(dataset, lists[dataset]);
+		},
+		lists: lists,
 	});
+
+	React.renderComponent(
+		todoListList,
+		(function() {
+			/* global document: false */
+			return document.getElementById('lists');
+		}())
+	);
+
 };
 
-// Given a name of a dataset, load all the data from SyncIt and completely
-// redraw the screen.
-var loadDataset = function(newDataset) {
-	dataset = newDataset;
-	refreshListList();
-	window.location.href = window.location.href.replace(/#.*/, '') + '#' + dataset;
-	syncItControl.addDatasets([dataset]);
-	syncItControl.connect();
-	$('#addItemForm').show();
-	$('#list').html('');
-	syncItFactory.loadAllKeysInDataset(syncIt, dataset, function(err, syncItData) {
-		for (var k in syncItData) {
-			if (syncItData.hasOwnProperty(k)) {
-				addItem(k, syncItData[k].name);
+var listApp = function() {
+	var currentDataset = false,
+		buildManipultionJson = function(operation, location, value) {
+			var sub = {};
+			sub['$' + operation] = {};
+			sub['$' + operation][location] = value;
+			return sub;
+		},
+		currentState = 'reset';
+
+
+	var todoToggle = function(todo, todoKey, force) {
+		var v = !todo.completed;
+		if (force !== undefined) {
+			v = force;
+		}
+		syncIt.update(
+			currentDataset,
+			todoKey,
+			buildManipultionJson('set', 'completed', v),
+			function(err) {
+				if (err !== Constants.SyncIt.Error.OK) {
+					throw new Error("App.todoToggle -> syncIt.update " +
+						"responded with error code " + err);
+				}
+				todoList.manip(
+					false,
+					buildManipultionJson(
+						'set',
+						'todos.' + todoKey + '.completed',
+						v
+					),
+					function() {}
+				);
 			}
+		);
+	};
+
+	var todoDestroy = function(todo, todoKey) {
+		syncIt.remove(
+			currentDataset,
+			todoKey,
+			function(err, d, k) {
+				if (err) { throw "SyncIt Error: " + err; }
+				todoList.manip(
+					false,
+					buildManipultionJson('unset', 'todos.' + k, 1),
+					function() {}
+				);
+			}
+		);
+	};
+
+	syncIt.listenForFed(function(dataset, datakey, queueitem, newStoreRecord) {
+		todoList.manip(
+			false,
+			buildManipultionJson(
+				queueitem.o === 'remove' ? 'unset' : 'set',
+				'todos.' + datakey,
+				queueitem.o === 'remove' ? 1 : newStoreRecord.i
+			),
+			function() {}
+		);
+	});
+
+	syncItControl.on('downloaded', function(downloadedCount) {
+		loadingPopup.show('Applying Changes...', downloadedCount);
+	});
+
+	syncIt.on('fed', loadingPopup.increment);
+
+	syncItControl.on('entered-state', function(state) {
+
+		currentState = state;
+
+		var colors = {
+			'DISCONNECTED': 'white',
+			'RESET': 'black',
+			'ANALYZE': 'orange',
+			'MISSING_DATASET': 'blue',
+			'ALL_DATASET': 'blue',
+			'ADDING_DATASET': 'pink',
+			'PUSHING_DISCOVERY': 'grey',
+			'PUSHING': 'green',
+			'SYNCHED': 'lightgreen',
+			'ERROR': 'red'
+		};
+
+		browserLights(colors[state]);
+
+		/* global setTimeout: false */
+		if (state === 'disconnected') {
+			setTimeout(function() {
+				syncItControl.connect();
+			}, 10000);
+		}
+
+		if (!state.match(/downloading$/)) {
+			loadingPopup.hide();
 		}
 	});
+		
+	var todoList = new TodoList({
+		nowShowing: Constants.ALL_TODOS,
+		todos: [],
+		onTodoToggle: function(todo, todoKey) {
+			todoToggle(todo, todoKey);
+		},
+		onNewTodoRequest: function(newTodoData) {
+			syncIt.set(
+				currentDataset,
+				syncItFactory.getTLIdEncoderDecoder().encode(),
+				{ completed: false, editing: false, title: newTodoData.title},
+				function(err, d, k, q, storedInformation) {
+					if (err) { throw "SyncIt Error: " + err; }
+					todoList.manip(
+						false,
+						buildManipultionJson(
+							'set',
+							'todos.' + k,
+							storedInformation.i
+						),
+						function() {}
+					);
+				}
+			);
+		},
+		onTodoUpdateTitle: function(todo, todoKey, title, next) {
+			syncIt.update(
+				currentDataset,
+				todoKey,
+				buildManipultionJson('set', 'title', title),
+				function(err, d, k) {
+					if (err) { throw "SyncIt Error: " + err; }
+					if (err !== Constants.SyncIt.Error.OK) {
+						if (err !== Constants.SyncIt.Error.OK) {
+							throw new Error("App.todoToggle -> syncIt.update " +
+								"responded with error code " + err);
+						}
+					}
+					todoList.manip(
+						false,
+						buildManipultionJson('set', 'todos.' + k + '.title', title),
+						function() {}
+					);
+					next();
+				}
+			);
+		},
+		onMarkAllTodo: function(checked) {
+			syncItLoadAllKeysInDataset(syncIt, currentDataset, function(err, data) {
+				if (err) { throw "Could not load all data in " + currentDataset; }
+				objectMap(data, function(v, k) {
+					todoToggle(v, k, checked);
+				});
+			});
+		},
+		onTodoDestroy: todoDestroy,
+		onClearCompleted: function() {
+			syncItLoadAllKeysInDataset(syncIt, currentDataset, function(err, data) {
+				if (err) { throw "Could not load all data in " + currentDataset; }
+				objectMap(data, function(v, k) {
+					if (v.completed) {
+						todoDestroy(v, k);
+					}
+				});
+			});
+		}
+	});
+
+	React.renderComponent(
+		todoList,
+		(function() {
+			/* global document: false */
+			return document.getElementById('todoapp');
+		}())
+	);
+
+	var transitionToDataset = function(dataset) {
+		currentDataset = false;
+		todoList.setProps({
+			dataset: false
+		});
+		
+		syncItControl.connect();
+		syncItControl.addDatasets([dataset], function() {
+			syncItLoadAllKeysInDataset(syncIt, dataset, function(err, data) {
+				if (err) { throw "Could not load all data in " + dataset; }
+				currentDataset = dataset;
+				todoList.setProps({dataset: dataset, todos: data});
+			});
+		});
+
+	};
+
+	var router = routerLib.Router({
+		'/': function() {
+				window.location = '/';
+			},
+		'/:dataset': function(dataset) {
+				todoList.setState({nowShowing: Constants.ALL_TODOS});
+				transitionToDataset(dataset);
+			},
+		'/:dataset/active': function(dataset) {
+				todoList.setState({nowShowing: Constants.ACTIVE_TODOS});
+				transitionToDataset(dataset);
+			},
+		'/:dataset/completed': function(dataset) {
+				todoList.setState({nowShowing: Constants.COMPLETED_TODOS});
+				transitionToDataset(dataset);
+			}
+	});
+
+	router.init();
+	router.handler();
 };
 
-// User wants a new list, generate a new dataset name, replace the URL bars
-// hash and then use loadDataset to refresh the whole screen.
-$('#newList').bind('click', function(evt) {
-	evt.preventDefault();
-	loadDataset(syncItFactory.getTLIdEncoderDecoder().encode());
-});
-
-// Clicking on remove next to an item (items are stored in Datakeys) will fire
-// a syncIt.remove() call, this will mark the item as deleted and remove it
-// from the screen. The item will be really deleted when SyncItControl knows
-// it's been uploaded.
-$('#list').delegate('.remove-item', 'click', function(evt) {
-	evt.preventDefault();
-	var datakey = $(evt.target).parent().attr('id').replace(/^.*\-/,'');
-	syncIt.remove(dataset, datakey, function(err) {
-		if (err) { return handleErr(err); }
-		removeItem(datakey);
-	});
-});
-
-// The form which is used for adding items will call syncIt.set with a Dataset
-// and a new Datakey. Once that is processed the item will be added to the
-// screen and the input emptied, ready for adding another one.
-$('#addItemForm').bind('submit', function(evt) {
-	evt.preventDefault();
-	syncIt.set(dataset, syncItFactory.getTLIdEncoderDecoder().encode(), { name: $('#item').val() }, function(err, dataset, datakey, queueitem) {
-		if (err) { return handleErr(err); }
-		addItem(datakey, queueitem.u.name);
-	});
-	$('#item').val('');
-});
-
-// Clicking a dataset, let the normal event flow through, which will change the
-// URL bar but also go and load the new data.
-$('#datasets').delegate('a', 'click', function(evt) {
-	loadDataset($(evt.target).attr('href').substr(1));
-});
-
-// If data arrives from another client, SyncItControl will automatically "feed"
-// it into SyncIt and use the conflict resolution function (
-// takeLatestConflictResolutionFunction) if neccessary. Once all this is done
-// the SyncIt.listenForFed()'s callback will be fired and in this case we will
-// update the screen.
-syncIt.listenForFed(function(qDataset, qDatakey, queueitem /*, newStoreRecord */) {
-
-	// It is perfectly possible that we might be monitoring multiple datasets, so
-	// we need to make sure that we don't draw things on the screen that should
-	// not be there.
-	if (qDataset !== dataset) {
-		return false;
-	}
-
-	// If the operation was remove, then remove it.
-	if (queueitem.o === 'remove') {
-		return removeItem(qDatakey);
-	}
-
-	// otherwise add it.
-	addItem(qDatakey, queueitem.u.name);
-});
-
-syncItControl.on('entered-state', function(state) {
-	// console.log("STATE: " + state);
-});
-
-// If we have a dataset load it, otherwise just give a list of datasets and the
-// opportunity to create a new one.
-if (dataset) {
-	loadDataset(dataset);
-} else {
-	refreshListList();
-}
+return { list: listApp, front: frontApp };
 
 }(
-	$,
-	require('./takeLatestConflictResolutionFunction'),
-	require('./getDeviceId'),
-	require('./SyncItFactory'),
-	require('reqwest')
+	React, require('../jsx/TodoListList'),
+	require('../jsx/RenameListPopup'), require('../jsx/OkCancelPopup'),
+	require('../jsx/TodoList'), require('./Constants'),
+	require('./syncItLoadAllKeysInDataset'), require('rekey'),
+	require('./getDeviceId'), require('./SyncItFactory'),
+	require('mout/object/map'), require('director/build/director.js'),
+	require('browser-lights'), require('../jsx/UpdateNotifierPopup'),
+	require('./getChangeLog'), /* require('syncit/FakeLocalStorage'), */
+	require('../jsx/LoadingPopup'), require('../jsx/MailtoPopup'),
+	require('./takeLatestConflictResolutionFunction'), require('reqwest'),
+	require('when/callbacks'), require('when'),
+	require('mout/array/map'), require('sync-it/syncItCallbackToPromise'),
+	require('domready')
+
 ));
