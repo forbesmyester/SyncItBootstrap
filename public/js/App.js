@@ -2,7 +2,8 @@ module.exports = (function (
 	$,
 	takeLatestConflictResolutionFunction,
 	getDeviceId,
-	SyncItFactory
+	SyncItFactory,
+	req
 ){
 
 /* global window: false, document: false */
@@ -33,6 +34,32 @@ var
 	// the documentation at https://github.com/forbesmyester
 	syncIt = syncItFactory.getSyncIt(deviceId),
 
+	// This function will be used for uploading individual queueitems
+	uploadChangeFunction = function(queueitem, next) {
+		req({
+			url: '/syncit/' + deviceId,
+			type: 'json',
+			method: 'post',
+			data: queueitem,
+			error: function(xmlHttpRequest) {
+				if (xmlHttpRequest.status == 303) {
+					return next(null, null);
+				}
+				next(xmlHttpRequest);
+			},
+			success: function(resp) {
+				next(null, resp.sequence.replace(/.*\//,''));
+			}
+		});
+	},
+
+	// This will take a url encoded set of datasets in the form
+	// dataset[datasetname]=sequenceId&dataset[datasetname]=sequenceid
+	// and transform it into a URL.
+	getEventSourceUrl = function(urlEncodedDatasets) {
+		return '/sync/' + deviceId + '?' + urlEncodedDatasets;
+	},
+
 	// SyncItControl knows about the above instance of SyncIt and also knows
 	// how to communicate with the bundled Node.JS backend through EventSource,
 	// GET and POST HTTP requests. It makes using SyncIt easy but it is not
@@ -40,6 +67,8 @@ var
 	// be a relatively simple job.
 	syncItControl = syncItFactory.getSyncItControl(
 		deviceId,
+		uploadChangeFunction,
+		getEventSourceUrl,
 		takeLatestConflictResolutionFunction
 	),
 
@@ -54,10 +83,7 @@ var
 // reconnect automatically. For more documentation see
 // https://github.com/forbesmyester/SyncItControl
 syncItControl.on('entered-state', function(state) {
-	if (console && console.log) {
-		console.log("State: " + state);
-	}
-	if (state === 'disconnected') {
+	if (state === 'DISCONNECTED') {
 		setTimeout(function() {
 			syncItControl.connect();
 		}, 10000);
@@ -90,7 +116,7 @@ var refreshListList = function() {
 	var $datasets = $('#datasets');
 	$datasets.html('');
 	syncIt.getDatasetNames(function(err, datasets) {
-		if (datasets.indexOf(dataset) === -1) {
+		if (dataset.length && (datasets.indexOf(dataset) === -1)) {
 			datasets.push(dataset);
 		}
 		$datasets.append($.map(datasets, function(name) {
@@ -110,7 +136,7 @@ var loadDataset = function(newDataset) {
 	dataset = newDataset;
 	refreshListList();
 	window.location.href = window.location.href.replace(/#.*/, '') + '#' + dataset;
-	syncItControl.addMonitoredDataset(dataset);
+	syncItControl.addDatasets([dataset]);
 	syncItControl.connect();
 	$('#addItemForm').show();
 	$('#list').html('');
@@ -174,10 +200,18 @@ syncIt.listenForFed(function(qDataset, qDatakey, queueitem /*, newStoreRecord */
 	if (qDataset !== dataset) {
 		return false;
 	}
+
+	// If the operation was remove, then remove it.
 	if (queueitem.o === 'remove') {
 		return removeItem(qDatakey);
 	}
+
+	// otherwise add it.
 	addItem(qDatakey, queueitem.u.name);
+});
+
+syncItControl.on('entered-state', function(state) {
+	// console.log("STATE: " + state);
 });
 
 // If we have a dataset load it, otherwise just give a list of datasets and the
@@ -192,5 +226,6 @@ if (dataset) {
 	$,
 	require('./takeLatestConflictResolutionFunction'),
 	require('./getDeviceId'),
-	require('./SyncItFactory')
+	require('./SyncItFactory'),
+	require('reqwest')
 ));

@@ -10,9 +10,7 @@ module.exports = (function(
 
 	SyncItControl,
 	EventSourceMonitor,
-	SyncLocalStorage,
-	StoreSequenceId,
-	req
+	SyncLocalStorage
 ) {
 
 	"use strict";
@@ -61,7 +59,7 @@ module.exports = (function(
 		syncItLoadAllKeysInDataset(syncIt, dataset, next);
 	};
 
-	Factory.prototype.getSyncItControl = function(deviceId, conflictResolutionFunction, options) {
+	Factory.prototype.getSyncItControl = function(deviceId, uploadChangeFunction, getEventSourceUrl, conflictResolutionFunction, options) {
 
 		if (this._syncItControl) { return this._syncItControl; }
 
@@ -69,29 +67,16 @@ module.exports = (function(
 
 		var getEventSourceMonitor = function() {
 
-			var getUrl = function(datasets) {
-				var url = baseUrl + '/sync/' + deviceId;
-				if (options && options.hasOwnProperty('eventSourceUrl')) {
-					url = options.eventSourceUrl;
-				}
-				url = url + '?dataset[]=';
-				return url + datasets.join(
-					'&dataset[]='
-				);
-			};
+			var factory = function(urlEncodedDatasets) {
 
-			var factory = function(dotSeperatedDatasets) {
-
-				var datasets = dotSeperatedDatasets.split('.');
-
-				if (!datasets.length) {
+				if (!urlEncodedDatasets.length) {
 					throw new Error(
 						"getConfiguredSyncItControl -> eventSourceMonitor: " +
 						"Was expecting one or more datasets"
 					);
 				}
 
-				return new window.EventSource(getUrl(datasets));
+				return new window.EventSource(getEventSourceUrl(urlEncodedDatasets));
 
 			};
 
@@ -106,59 +91,19 @@ module.exports = (function(
 			JSON.parse
 		);
 
-		var storeSequenceId = new StoreSequenceId(
-			stateConfig,
-			this.getTLIdEncoderDecoder().sort
+		var controlAsyncLocalStorage = new AsyncLocalStorage(
+			this._getTheLocalStorage(),
+			'syncit-seq',
+			JSON.stringify,
+			JSON.parse
 		);
-
-		var downloadDatasetFunction = function(dataset, fromSeqId, next) {
-			req({
-				url: baseUrl + '/syncit/sequence/' + dataset + (fromSeqId === null ? '' : '/' + fromSeqId),
-				type: 'json',
-				method: 'get',
-				error: function(e) {
-					next(e);
-				},
-				success: function(data) {
-					next(null, data.queueitems, data.seqId);
-				}
-			});
-		};
-
-		if (options && options.hasOwnProperty('downloadDatasetFunction')) {
-			downloadDatasetFunction = options.downloadDatasetFunction;
-		}
-
-		var uploadChangeFunction = function(queueitem, next) {
-			req({
-				url: baseUrl + '/syncit/' + deviceId,
-				type: 'json',
-				method: 'post',
-				data: queueitem,
-				error: function(xmlHttpRequest) {
-					if (xmlHttpRequest.status == 303) {
-						return next(null, null);
-					}
-					next(xmlHttpRequest);
-				},
-				success: function(resp) {
-					next(null, resp.sequence.replace(/.*\//,''));
-				}
-			});
-		};
-
-		if (options && options.hasOwnProperty('uploadChangeFunction')) {
-			uploadChangeFunction = options.uploadChangeFunction;
-		}
 
 		this._syncItControl = new SyncItControl(
 			this.getSyncIt(),
 			getEventSourceMonitor(),
-			storeSequenceId,
-			downloadDatasetFunction,
+			controlAsyncLocalStorage,
 			uploadChangeFunction,
-			conflictResolutionFunction,
-			[]
+			conflictResolutionFunction
 		);
 
 		return this._syncItControl;
@@ -177,9 +122,7 @@ module.exports = (function(
 	require('sync-it/dontListLocallyDeletedDatakeys'),
 	require('./syncItLoadAllKeysInDataset.js'),
 
-	require('syncit-control'),
+	require('syncit-control/Control'),
 	require('eventsource-monitor'),
-	require('sync-it/SyncLocalStorage'),
-	require('syncit-control/StoreSequenceId'),
-	require('reqwest')
+	require('sync-it/SyncLocalStorage')
 ));
