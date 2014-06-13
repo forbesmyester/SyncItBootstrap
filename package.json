@@ -1,28 +1,38 @@
 {
-  "name": "syncit-bootstrap",
+  "name": "syncit-todomvc",
   "version": "0.8.2",
   "scripts": {
     "start": "node app.js",
     "test": "mocha test/*"
   },
   "dependencies": {
-    "bower": "^1.3.3",
-    "browserify": "^4.1.5",
+    "bower": "^1.3.5",
+    "browser-lights": "^0.6.4",
+    "browserify": "^4.1.9",
     "browserify-middleware": "^3.0.0",
+    "director": "^1.2.3",
+    "domready": "^1.0.5",
     "eventsource-monitor": "^0.9.3",
     "express": "3.4.7",
     "get_tlid_encoder_decoder": "^0.9.3",
-    "jade": "~1.1.4",
+    "ini": "^1.2.1",
+    "jade": "^1.1.5",
     "jshint": "~2.4.4",
+    "manip": "^0.9.3",
     "mongoskin": "^1.4.1",
     "mout": "^0.9.1",
+    "react-tools": "^0.10.0",
+    "reactify": "^0.13.1",
+    "rekey": "^0.9.0",
     "reqwest": "^1.1.0",
     "sse-communication": "^0.9.0",
+    "stylus": "^0.46.3",
     "sync-it": "^0.9.14",
     "syncit-control": "^0.9.15",
     "syncit-server": "^0.9.5",
     "transition-state": "^0.9.3",
-    "when": "~2.8.0"
+    "uglify-js": "^2.4.13",
+    "when": "^2.8.0"
   },
   "devDependencies": {
     "mocha": "~1.17.0",

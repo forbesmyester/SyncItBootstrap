@@ -18,6 +18,7 @@ module.exports = (function(
 		this._inProduction = inProduction;
 		this._tLIdEncoderDecoder = null;
 		this._theLocalStorage = null;
+		this._asyncLocalStorage = {};
 	};
 
 	Factory.prototype.getTLIdEncoderDecoder = function() {
@@ -35,18 +36,31 @@ module.exports = (function(
 		return this._theLocalStorage;
 	};
 
+	Factory.prototype.getAsyncLocalStorage = function(name) {
+		if (['syncit', 'syncit-seq'].indexOf(name) > -1) {
+			throw new Error('The names "syncit" and "syncit-seq" are restricted for internal use');
+		}
+		return this._getAsyncLocalStorage(name);
+	};
+
+	Factory.prototype._getAsyncLocalStorage = function(name) {
+		if (!this._asyncLocalStorage.hasOwnProperty(name)) {
+			this._asyncLocalStorage[name] = new AsyncLocalStorage(
+				this._getTheLocalStorage(),
+				name,
+				JSON.stringify,
+				JSON.parse
+			);
+		}
+		return this._asyncLocalStorage[name];
+	};
+
 	Factory.prototype.getSyncIt = function(deviceId) {
 		if (this._syncIt) { return this._syncIt; }
 
-		var asyncLocalStorage = new AsyncLocalStorage(
-			this._getTheLocalStorage(),
-			'syncit',
-			JSON.stringify,
-			JSON.parse
-		);
 
 		var pathstore = new Path_AsyncLocalStorage(
-			asyncLocalStorage,
+			this._getAsyncLocalStorage('syncit'),
 			this.getTLIdEncoderDecoder()
 		);
 
@@ -84,24 +98,10 @@ module.exports = (function(
 
 		};
 
-		var stateConfig = new SyncLocalStorage(
-			this._getTheLocalStorage(),
-			'syncit-seq',
-			JSON.stringify,
-			JSON.parse
-		);
-
-		var controlAsyncLocalStorage = new AsyncLocalStorage(
-			this._getTheLocalStorage(),
-			'syncit-seq',
-			JSON.stringify,
-			JSON.parse
-		);
-
 		this._syncItControl = new SyncItControl(
 			this.getSyncIt(),
 			getEventSourceMonitor(),
-			controlAsyncLocalStorage,
+			this._getAsyncLocalStorage('syncit-seq'),
 			uploadChangeFunction,
 			conflictResolutionFunction
 		);

@@ -1,0 +1,41 @@
+doctype html
+html(lang="en", manifest=production?"/offline.manifest.appcache":undefined)
+	head
+		title React • TodoMVC
+		meta(http-equiv="X-UA-Compatible", content="IE=Edge")
+		meta(charset="utf-8")
+		meta(content='True', name='HandheldFriendly')
+		meta(name="viewport", content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0")
+		link(rel="stylesheet", href="/vendor-bower/todomvc-common/base.css")
+		link(rel="stylesheet", href="/css/main.css")
+		link(rel="stylesheet", href="/css/list.css")
+
+	body(data-in-production=production?1:0, data-persist-data=persistData?1:0)
+		section(id="todoapp")
+		footer(id="info")
+			div
+				p Double-click to edit a todo
+				p 
+					span Created by &nbsp;
+					a(href="http://github.com/petehunt") petehunt
+				p
+					span Adapted for AMD & SyncIt by &nbsp;
+					a(href="http://github.com/forbesmyester") Matthew Forrester
+					span &nbsp; and hosted at &nbsp;
+					a(href="http://github.com/forbesmyester/SyncItTodoMvc") GitHub
+				p
+					span Perhaps part of &nbsp;
+					a(href="http://todomvc.com") TodoMVC
+		div(id="benchmark")
+		#okCancelPopup
+		#updateNotifierPopup
+		#loadingPopup
+
+	script(src="/vendor-bower/react/react-with-addons.min.js")
+	if production
+		script(src="/js/App.bin.js")
+	else
+		script(src="/js/App.js")
+	script.
+		app.list();
+
