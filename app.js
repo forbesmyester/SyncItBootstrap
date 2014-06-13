@@ -1,26 +1,12 @@
 /**
  * Module dependencies.
  */
-var appConfig = {
-	http: { port: 3000 },
-	databases: {
-		main: {
-			port: 27017,
-			host: '192.168.24.11',
-			name: 'syncitbootstrap'
-		}
-	},
-	syncit: {
-		data_collection: 'syncit'
-	},
-	persistData: true,
-};
-
 var express = require('express'),
 	path = require('path'),
 	app = express(),
 	generateNewDatasetName = require('./lib/generateNewDatasetName'),
 	fs = require('fs'),
+	appConfig = require('ini').parse(fs.readFileSync('./config.ini', 'utf-8')),
 	browserify = require('browserify-middleware'),
 	mongoskin = require('mongoskin'),
 	SseCommunication = require('sse-communication/Simple'),
@@ -34,7 +20,7 @@ var express = require('express'),
 	sseCommunication = new SseCommunication(),
 	syncItServerPersist = (function() {
 		"use strict";
-		if (!appConfig.persistData) {
+		if (!parseInt(appConfig.syncit.persist_data, 10)) {
 			return new ServerPersistMemoryAsync();
 		}
 		var mongoskinConnection = mongoskin.db(
@@ -164,7 +150,7 @@ var getStandardTemplateData = function() {
 	return {
 		title: 'Express',
 		production: ( app.get('env') === 'production' ? true : false),
-		persistData: appConfig.persistData ? true : false
+		persistData: parseInt(appConfig.syncit.persist_data, 10) ? true : false
 	};
 };
 
