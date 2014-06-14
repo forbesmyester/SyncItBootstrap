@@ -1,30 +1,41 @@
 /**
  * Module dependencies.
  */
-var appConfig = {
-	http: { port: 3000 },
-	databases: {
-		main: {
-			port: 27017,
-			host: '192.168.24.11',
-			name: 'syncitbootstrap'
-		}
-	},
-	syncit: {
-		data_collection: 'syncit'
-	},
-	persistData: true,
-};
-
 var express = require('express'),
 	path = require('path'),
 	app = express(),
+	fs = require('fs'),
+	appConfig = require('ini').parse(fs.readFileSync('./config.ini', 'utf-8')),
 	browserify = require('browserify-middleware'),
 	mongoskin = require('mongoskin'),
 	SseCommunication = require('sse-communication/Simple'),
 	ReferenceServer = require('syncit-server/ReferenceServer'),
-	ServerPersistMongodb = require('syncit-server/ServerPersist/Mongodb'),
-	ServerPersistMemoryAsync = require('syncit-server/ServerPersist/MemoryAsync'),
+	syncItServerPersist = (function() {
+		"use strict";
+
+		var ServerPersistMongodb = require('syncit-server/ServerPersist/Mongodb'),
+			ServerPersistMemoryAsync = require('syncit-server/ServerPersist/MemoryAsync');
+
+		if (!parseInt(appConfig.syncit.persist_data, 10)) {
+			return new ServerPersistMemoryAsync();
+		}
+
+		var mongoskinConnection = mongoskin.db(
+			'mongodb://' +
+				appConfig.databases.main.host + ':' +
+				appConfig.databases.main.port + '/' +
+				appConfig.databases.main.name,
+			{w:true}
+		);
+
+		return new ServerPersistMongodb(
+			function(v) { return JSON.parse(JSON.stringify(v)); },
+			mongoskinConnection,
+			mongoskin.ObjectID,
+			appConfig.syncit.data_collection,
+			function() {}
+		);
+	}()),
 	http = require('http'),
 	sseCommunication = new SseCommunication(),
 	setDeviceIdMiddleware = function(req, res, next) {
@@ -32,39 +43,14 @@ var express = require('express'),
 		req.deviceId = req.params.deviceId;
 		next(null);
 	},
-	referenceServer = (function() {
-		"use strict";
-
-		if (!appConfig.persistData) {
-			return new ReferenceServer(
-				function(req) { return req.deviceId; },
-				new ServerPersistMemoryAsync(),
-				sseCommunication
-			);
-		}
-
-		var mongoskinConnection = mongoskin.db(
-				'mongodb://' +
-					appConfig.databases.main.host + ':' +
-					appConfig.databases.main.port + '/' +
-					appConfig.databases.main.name,
-				{w:true}
-			),
-			dbPersistance = new ServerPersistMongodb(
-				function(v) { return JSON.parse(JSON.stringify(v)); },
-				mongoskinConnection,
-				mongoskin.ObjectID,
-				appConfig.syncit.data_collection,
-				function() {}
-			);
-
-		return new ReferenceServer(
-			function(req) { return req.deviceId; },
-			dbPersistance,
-			sseCommunication
-		);
-
-	}());
+	referenceServer = new ReferenceServer(
+		function(req) {
+			"use strict";
+			return req.deviceId;
+		},
+		syncItServerPersist,
+		sseCommunication
+	);
 
 // all environments
 (function(mode) {
@@ -80,7 +66,9 @@ var express = require('express'),
 	app.use(express.methodOverride());
 	app.use(app.router);
 
-	app.get('/js/App.js', browserify('./public/js/App.js'));
+	if ( mode !== 'production') {
+		app.get('/js/App.js', browserify('./public/js/App.js'));
+	}
 
 	app.use(express.static(path.join(__dirname, 'public')));
 
@@ -140,7 +128,10 @@ app.get('/syncit/change/:s/:k/:v', function(req, res, next) {
 
 app.get('/', function(req, res) {
 	"use strict";
-	res.render('front', {persistData: appConfig.persistData});
+	res.render('front', {
+		production: ( app.get('env') === 'production' ? true : false),
+		persistData: parseInt(appConfig.syncit.persist_data, 10) ? true : false
+	});
 });
 
 app.post('/syncit/:deviceId', setDeviceIdMiddleware, function(req, res, next) {
