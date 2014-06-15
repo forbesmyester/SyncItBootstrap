@@ -26,7 +26,7 @@
     "rekey": "^0.9.0",
     "reqwest": "^1.1.0",
     "sse-communication": "^0.9.0",
-    "sync-it": "^0.9.16",
+    "sync-it": "^0.9.17",
     "syncit-control": "^0.10.1",
     "syncit-server": "^0.9.7",
     "transition-state": "^0.9.3",

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-npm install
+npm --loglevel=win install
 node_modules/.bin/bower --config.interactive=false -s -f install
 
 node_modules/.bin/browserify -s app -t reactify public/js/App.js | node_modules/.bin/uglifyjs -m -c > public/js/App.bin.js

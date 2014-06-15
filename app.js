@@ -11,18 +11,20 @@ var express = require('express'),
 	mongoskin = require('mongoskin'),
 	SseCommunication = require('sse-communication/Simple'),
 	ReferenceServer = require('syncit-server/ReferenceServer'),
-	ServerPersistMongodb = require('syncit-server/ServerPersist/Mongodb'),
 	fixNoFlightCorsRequestBody = require('./lib/fixNoFlightCorsRequestBody'),
 	generateRandomString = require('./lib/generateRandomString.js'),
-	ServerPersistMemoryAsync = require('syncit-server/ServerPersist/MemoryAsync'),
 	http = require('http'),
 	https = require('https'),
 	sseCommunication = new SseCommunication(),
 	syncItServerPersist = (function() {
 		"use strict";
+		var ServerPersistMongodb = require('syncit-server/ServerPersist/Mongodb'),
+			ServerPersistMemoryAsync = require('syncit-server/ServerPersist/MemoryAsync');
+
 		if (!parseInt(appConfig.syncit.persist_data, 10)) {
 			return new ServerPersistMemoryAsync();
 		}
+
 		var mongoskinConnection = mongoskin.db(
 			'mongodb://' +
 				appConfig.databases.main.host + ':' +
@@ -30,6 +32,7 @@ var express = require('express'),
 				appConfig.databases.main.name,
 			{w:true}
 		);
+
 		return new ServerPersistMongodb(
 			function(v) { return JSON.parse(JSON.stringify(v)); },
 			mongoskinConnection,
