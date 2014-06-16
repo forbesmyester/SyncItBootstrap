@@ -1,6 +1,6 @@
 {
   "name": "syncit-todomvc",
-  "version": "0.8.6",
+  "version": "0.8.7",
   "scripts": {
     "start": "node app.js",
     "test": "mocha test/*"

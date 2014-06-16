@@ -81,7 +81,7 @@ var
 	// dataset[datasetname]=sequenceId&dataset[datasetname]=sequenceid
 	// and transform it into a URL.
 	getEventSourceUrl = function(urlEncodedDatasets) {
-		return '/sync/' + deviceId + '?' + urlEncodedDatasets;
+		return baseUrl + '/sync/' + deviceId + '?' + urlEncodedDatasets;
 	},
 
 	// SyncItControl knows about the above instance of SyncIt and also knows
