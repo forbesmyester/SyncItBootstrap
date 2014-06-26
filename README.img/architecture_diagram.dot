@@ -1,0 +1,52 @@
+digraph process {
+	
+	subgraph clusterbrowser {
+		pos="0,0"
+		overlap="scalexy";
+		label = "Your Browser / Phonegap";
+		yourapp [label="Your App"];
+		syncit [label="SyncIt"];
+		syncitcontrol [label="SyncItControl"];
+		localstorage [label="LocalStorage"];
+	}
+	
+	subgraph clusterserver {
+		pos="0,2"
+		label = "Server";
+		subgraph x {
+			sequence [label="Sequence"];
+			sse [label="Server-Sent Events"];
+			post [label="POST"];
+			mongodb [label="MongoDB"];
+		}
+	}
+	
+	subgraph clusterotherbrowser {
+		pos="2,1"
+		rank=min
+		overlap="scalexy";
+		label = "Their Browser / Phonegap";
+		theirapp [label="Their App"];
+		theirsyncit [label="SyncIt"];
+		theirsyncitcontrol [label="SyncItControl"];
+		theirlocalstorage [label="LocalStorage"];
+	}
+	
+	yourapp -> syncit [label = "set() / update() / remove()"];
+	syncit -> localstorage [label="setItem() / getItem() / removeItem()"];
+	syncit -> syncitcontrol [label="on('listenForAddedToPath')"];
+	syncitcontrol -> post [label="$.post(Queueitem)"];
+	sse -> theirsyncitcontrol [label="SSE: Queueitem"];
+	sequence -> syncitcontrol [label="$.get(/[dataset]/[datakey])"];
+	
+	post -> mongodb [label="stores"];
+	mongodb -> sequence [label="loads"];
+	post -> sse [label="message"];
+	
+	theirsyncit ->theirapp;
+	theirsyncit -> theirlocalstorage;
+	theirsyncitcontrol -> theirsyncit;
+	
+	theirsyncitcontrol -> yourapp [style=invis]; /* hack */
+	
+}
