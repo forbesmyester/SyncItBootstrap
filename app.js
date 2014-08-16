@@ -142,15 +142,6 @@ app.post('/syncit/:deviceId', setDeviceIdMiddleware, function(req, res, next) {
 	});
 });
 
-var isDatasetInvalidOrAlreadyUsed = function(dataset, next) {
-	"use strict";
-	if (dataset.match(/^[0-9]/)) { return next(null, true); }
-	dbPersistance.getQueueitems(dataset, null, function(err, status, queueitems) {
-		if (err) { return next(err); }
-		next(null, queueitems.length > 0 ? true : false);
-	});
-};
-
 app.get(
 	'/sync/:deviceId',
 	setDeviceIdMiddleware,
@@ -168,6 +159,17 @@ app.get(
 		});
 	}
 );
+
+referenceServer.listenForFed(function(seqId, dataset, datakey, queueitem, newValue) {
+	"use strict";
+	var message =
+		"> The data stored at `" + dataset + "." + datakey + "` has changed to:\n>\n" +
+		">     " + JSON.stringify(newValue) + "\n>\n" +
+		"> This change occured because the following queueitem was applied:\n>\n" +
+		">     " + JSON.stringify(queueitem) + "\n>\n";
+	/* global console: false */
+	console.log(message);
+});
 
 var serverHttp = null;
 
