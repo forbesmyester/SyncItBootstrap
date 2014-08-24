@@ -16,8 +16,12 @@ var express = require('express'),
 		var ServerPersistMongodb = require('syncit-server/ServerPersist/Mongodb'),
 			ServerPersistMemoryAsync = require('syncit-server/ServerPersist/MemoryAsync');
 
-		if (!parseInt(appConfig.syncit.persist_data, 10)) {
+		if (appConfig.databases.main.type === 'memory') {
 			return new ServerPersistMemoryAsync();
+		}
+
+		if (appConfig.databases.main.type !== 'mongodb') {
+			throw 'Only "memory" and "mongodb" supported for data storage right now';
 		}
 
 		var mongoskinConnection = mongoskin.db(
@@ -130,7 +134,7 @@ app.get('/', function(req, res) {
 	"use strict";
 	res.render('front', {
 		production: ( app.get('env') === 'production' ? true : false),
-		persistData: parseInt(appConfig.syncit.persist_data, 10) ? true : false
+		persistData: appConfig.databases.main.type === 'memory' ? false : true
 	});
 });
 
