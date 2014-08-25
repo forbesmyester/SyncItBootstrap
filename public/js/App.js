@@ -8,7 +8,7 @@ module.exports = (function (
 	browserLights, UpdateNotifierPopup,
 	getChangeLog /*, FakeLocalStorage */,
 	LoadingPopup, MailtoPopup,
-	takeLatestConflictResolutionFunction, req,
+	todomvcConflictResolutionFunction, req,
 	whenCallback, when,
 	arrayMap, syncItCallbackToPromise
 ){
@@ -18,6 +18,17 @@ module.exports = (function (
 "use strict";
 
 var
+
+	// Conflict resolution function needs this...
+	todoList = null,
+
+	// Builds manipulations to send to the UI layer.
+	buildManipultionJson = function(operation, location, value) {
+		var sub = {};
+		sub['$' + operation] = {};
+		sub['$' + operation][location] = value;
+		return sub;
+	},
 
 	// Whether or not to persist data in LocalStorage, though this is fed through
 	// the jade template from the appConfig variable right at the top of the
@@ -84,6 +95,39 @@ var
 		return baseUrl + '/sync/' + deviceId + '?' + urlEncodedDatasets;
 	},
 
+	// Is fed an object with the key being a modifier, this will cause clone on
+	// title edits
+	editCloneFunc = function(changesToClone) {
+
+		var processCallback = function(err, s, k, q, storedInformation) {
+			if (err) { throw "SyncIt Error: " + err; }
+			todoList.manip(
+				false,
+				buildManipultionJson(
+					'set',
+					'todos.' + k,
+					storedInformation.i
+				),
+				function() {}
+			);
+		};
+
+		var func = null,
+			datakey = syncItFactory.getTLIdEncoderDecoder().encode();
+
+		for (var i=0; i<changesToClone.length; i++) {
+
+			func = syncIt[changesToClone[i].o].bind(syncIt);
+			
+			func(
+				changesToClone[i].s,
+				datakey,
+				changesToClone[i].u,
+				processCallback
+			);
+		}
+	},
+
 	// SyncItControl knows about the above instance of SyncIt and also knows
 	// how to communicate with the bundled Node.JS backend through EventSource,
 	// GET and POST HTTP requests. It makes using SyncIt easy but it is not
@@ -93,7 +137,7 @@ var
 		deviceId,
 		uploadChangeFunction,
 		getEventSourceUrl,
-		takeLatestConflictResolutionFunction
+		todomvcConflictResolutionFunction(editCloneFunc)
 	),
 
 	// Get a storage area that we can use for the app.
@@ -319,12 +363,6 @@ var frontApp = function() {
 
 var listApp = function() {
 	var currentDataset = false,
-		buildManipultionJson = function(operation, location, value) {
-			var sub = {};
-			sub['$' + operation] = {};
-			sub['$' + operation][location] = value;
-			return sub;
-		},
 		currentState = 'reset';
 
 
@@ -419,7 +457,7 @@ var listApp = function() {
 		}
 	});
 		
-	var todoList = new TodoList({
+	todoList = new TodoList({
 		nowShowing: Constants.ALL_TODOS,
 		todos: [],
 		onTodoToggle: function(todo, todoKey) {
@@ -546,7 +584,7 @@ return { list: listApp, front: frontApp };
 	require('browser-lights'), require('../jsx/UpdateNotifierPopup'),
 	require('./getChangeLog'), /* require('syncit/FakeLocalStorage'), */
 	require('../jsx/LoadingPopup'), require('../jsx/MailtoPopup'),
-	require('./takeLatestConflictResolutionFunction'), require('reqwest'),
+	require('./todomvcConflictResolutionFunction'), require('reqwest'),
 	require('when/callbacks'), require('when'),
 	require('mout/array/map'), require('sync-it/syncItCallbackToPromise'),
 	require('domready')
