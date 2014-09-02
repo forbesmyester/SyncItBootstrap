@@ -236,7 +236,7 @@ React.renderComponent(
 // reconnect automatically. For more documentation see
 // https://github.com/forbesmyester/SyncItControl
 syncItControl.on('entered-state', function(state) {
-	if (state === 'DISCONNECTED') {
+	if (['DISCONNECTED', 'UPLOAD_ERROR'].indexOf(state) > -1) {
 		setTimeout(function() {
 			syncItControl.connect();
 		}, 10000);
