@@ -249,6 +249,8 @@ var handleErr = function(err) {
 	alert("An Error " + err + " occurred.");
 };
 
+// Font App is the first page that allows the user to select which todo list
+// to view.
 var frontApp = function() {
 	var renameListPopup = new RenameListPopup(),
 		mailtoPopup = new MailtoPopup(),
@@ -363,7 +365,18 @@ var frontApp = function() {
 
 var listApp = function() {
 	var currentDataset = false,
-		currentState = 'reset';
+		currentState = 'reset',
+		getErrorHandler = function(syncItOperation, appAction) {
+			return function(err) {
+				if (err) {
+					str = syncItOperation + ': ' + 'caused error ' + err;
+					if (appAction !== undefined) {
+						str = appAction + ' -> ' + str;
+					}
+					throw new Error(str);
+				}
+			};
+		};
 
 
 	var todoToggle = function(todo, todoKey, force) {
@@ -375,21 +388,7 @@ var listApp = function() {
 			currentDataset,
 			todoKey,
 			buildManipultionJson('set', 'completed', v),
-			function(err) {
-				if (err !== Constants.SyncIt.Error.OK) {
-					throw new Error("App.todoToggle -> syncIt.update " +
-						"responded with error code " + err);
-				}
-				todoList.manip(
-					false,
-					buildManipultionJson(
-						'set',
-						'todos.' + todoKey + '.completed',
-						v
-					),
-					function() {}
-				);
-			}
+			getErrorHandler('syncIt.update', 'app.todoToggle')
 		);
 	};
 
@@ -397,28 +396,9 @@ var listApp = function() {
 		syncIt.remove(
 			currentDataset,
 			todoKey,
-			function(err, d, k) {
-				if (err) { throw "SyncIt Error: " + err; }
-				todoList.manip(
-					false,
-					buildManipultionJson('unset', 'todos.' + k, 1),
-					function() {}
-				);
-			}
+			getErrorHandler('syncIt.remove', 'app.todoDestroy')
 		);
 	};
-
-	syncIt.listenForFed(function(dataset, datakey, queueitem, newStoreRecord) {
-		todoList.manip(
-			false,
-			buildManipultionJson(
-				queueitem.o === 'remove' ? 'unset' : 'set',
-				'todos.' + datakey,
-				queueitem.o === 'remove' ? 1 : newStoreRecord.i
-			),
-			function() {}
-		);
-	});
 
 	syncItControl.on('downloaded', function(downloadedCount) {
 		loadingPopup.show('Applying Changes...', downloadedCount);
@@ -468,18 +448,7 @@ var listApp = function() {
 				currentDataset,
 				syncItFactory.getTLIdEncoderDecoder().encode(),
 				{ completed: false, editing: false, title: newTodoData.title},
-				function(err, d, k, q, storedInformation) {
-					if (err) { throw "SyncIt Error: " + err; }
-					todoList.manip(
-						false,
-						buildManipultionJson(
-							'set',
-							'todos.' + k,
-							storedInformation.i
-						),
-						function() {}
-					);
-				}
+				getErrorHandler('syncIt.set', 'app.onNewTodoRequest')
 			);
 		},
 		onTodoUpdateTitle: function(todo, todoKey, title, next) {
@@ -487,21 +456,7 @@ var listApp = function() {
 				currentDataset,
 				todoKey,
 				buildManipultionJson('set', 'title', title),
-				function(err, d, k) {
-					if (err) { throw "SyncIt Error: " + err; }
-					if (err !== Constants.SyncIt.Error.OK) {
-						if (err !== Constants.SyncIt.Error.OK) {
-							throw new Error("App.todoToggle -> syncIt.update " +
-								"responded with error code " + err);
-						}
-					}
-					todoList.manip(
-						false,
-						buildManipultionJson('set', 'todos.' + k + '.title', title),
-						function() {}
-					);
-					next();
-				}
+				getErrorHandler('syncIt.update', 'app.onTodoUpdateTitle')
 			);
 		},
 		onMarkAllTodo: function(checked) {
@@ -523,6 +478,27 @@ var listApp = function() {
 				});
 			});
 		}
+	});
+
+	// Once within a todo list this function does all manipulation of the view.
+	syncIt.listenForDataChange(function(storedInformation) {
+		if (currentDataset !== storedInformation.s) { return; }
+		if (storedInformation.r === true) {
+			return todoList.manip(
+				false,
+				buildManipultionJson('unset', 'todos.' + storedInformation.k, 1),
+				function() {}
+			);
+		}
+		todoList.manip(
+			false,
+			buildManipultionJson(
+				'set',
+				'todos.' + storedInformation.k,
+				storedInformation.i
+			),
+			function() {}
+		);
 	});
 
 	React.renderComponent(

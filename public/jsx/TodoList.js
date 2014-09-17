@@ -74,12 +74,12 @@ module.exports = (function (React,
 		save: function (todoToSave,
 					  key,
 					  title) {
-			this.props.onTodoUpdateTitle(todoToSave,
-					key,
-					title,
-					function() {
-				this.setState({ editing: null });
-			}.bind(this));
+			this.props.onTodoUpdateTitle(
+				todoToSave,
+				key,
+				title
+			);
+			this.setState({ editing: null });
 		},
 
 
