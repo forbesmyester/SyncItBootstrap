@@ -346,7 +346,7 @@ var frontApp = function() {
 					});
 				}
 			});
-			renameListPopup.show(dataset, lists[dataset]);
+			renameListPopup.show(dataset, lists[dataset] === null ? '' : lists[dataset]);
 		},
 		lists: lists,
 	});
