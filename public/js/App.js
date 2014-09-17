@@ -163,10 +163,7 @@ $('#newList').bind('click', function(evt) {
 $('#list').delegate('.remove-item', 'click', function(evt) {
 	evt.preventDefault();
 	var datakey = $(evt.target).parent().attr('id').replace(/^.*\-/,'');
-	syncIt.remove(dataset, datakey, function(err) {
-		if (err) { return handleErr(err); }
-		removeItem(datakey);
-	});
+	syncIt.remove(dataset, datakey, function(err) { if (err) { return handleErr(err); } });
 });
 
 // The form which is used for adding items will call syncIt.set with a Dataset
@@ -174,10 +171,12 @@ $('#list').delegate('.remove-item', 'click', function(evt) {
 // screen and the input emptied, ready for adding another one.
 $('#addItemForm').bind('submit', function(evt) {
 	evt.preventDefault();
-	syncIt.set(dataset, syncItFactory.getTLIdEncoderDecoder().encode(), { name: $('#item').val() }, function(err, dataset, datakey, queueitem) {
-		if (err) { return handleErr(err); }
-		addItem(datakey, queueitem.u.name);
-	});
+	syncIt.set(
+		dataset,
+		syncItFactory.getTLIdEncoderDecoder().encode(),
+		{ name: $('#item').val() },
+		function(err) { if (err) { return handleErr(err); } }
+	);
 	$('#item').val('');
 });
 
@@ -187,27 +186,24 @@ $('#datasets').delegate('a', 'click', function(evt) {
 	loadDataset($(evt.target).attr('href').substr(1));
 });
 
-// If data arrives from another client, SyncItControl will automatically "feed"
-// it into SyncIt and use the conflict resolution function (
-// takeLatestConflictResolutionFunction) if neccessary. Once all this is done
-// the SyncIt.listenForFed()'s callback will be fired and in this case we will
-// update the screen.
-syncIt.listenForFed(function(qDataset, qDatakey, queueitem /*, newStoreRecord */) {
+// When new data comes from the server and is fed or from local changes this
+// function will be fired to update the screen.
+syncIt.listenForDataChange(function(newStoreitem) {
 
 	// It is perfectly possible that we might be monitoring multiple datasets, so
 	// we need to make sure that we don't draw things on the screen that should
 	// not be there.
-	if (qDataset !== dataset) {
+	if (newStoreitem.s !== dataset) {
 		return false;
 	}
 
 	// If the operation was remove, then remove it.
-	if (queueitem.o === 'remove') {
-		return removeItem(qDatakey);
+	if (newStoreitem.r) {
+		return removeItem(newStoreitem.k);
 	}
 
 	// otherwise add it.
-	addItem(qDatakey, queueitem.u.name);
+	addItem(newStoreitem.k, newStoreitem.i.name);
 });
 
 syncItControl.on('entered-state', function(state) {
