@@ -1,4 +1,5 @@
 {
+	"smarttabs": true,
 	"globals": {
 		"module": false,
 		"$": false
