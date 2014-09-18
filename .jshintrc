@@ -2,7 +2,8 @@
 	"globals": {
 		"module": false,
 		"require": false,
-		"define": false
+		"define": false,
+		"process": false
 	},
 	"strict": true,
 	"smarttabs": true,

@@ -1,0 +1,7 @@
+#!/bin/sh
+
+# Bring in configuration data
+. ./config_rc
+
+# Launch
+node app.js

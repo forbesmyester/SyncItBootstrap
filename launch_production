@@ -1,7 +1,14 @@
 #!/bin/bash
 
+# Bring in configuration data
+. ./config_rc
+
+# Library Installations
 npm --loglevel=win install
 node_modules/.bin/bower --config.interactive=false -s -f install
 
+# Use Browserify to put all the JS together...
 node_modules/.bin/browserify public/js/App.js | node_modules/.bin/uglifyjs -m -c > public/js/App.bin.js
+
+# Launch
 NODE_ENV=production node app.js

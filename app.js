@@ -4,41 +4,46 @@
 var express = require('express'),
 	path = require('path'),
 	app = express(),
-	fs = require('fs'),
-	appConfig = require('ini').parse(fs.readFileSync('./config.ini', 'utf-8')),
 	browserify = require('browserify-middleware'),
 	mongoskin = require('mongoskin'),
 	SseCommunication = require('sse-communication/Simple'),
 	ReferenceServer = require('syncit-server/ReferenceServer'),
+	getConfiguration = function(key) {
+		"use strict";
+		if (!process.env.hasOwnProperty(key)) {
+			throw new Error("Could not find configuration key '" + key + "'");
+		}
+		return process.env[key];
+	},	
+	nonPersistentDatabases = ['MEMORY'],
 	syncItServerPersist = (function() {
 		"use strict";
 
 		var ServerPersistMongodb = require('syncit-server/ServerPersist/Mongodb'),
 			ServerPersistMemoryAsync = require('syncit-server/ServerPersist/MemoryAsync');
 
-		if (appConfig.databases.main.type === 'memory') {
+		if (getConfiguration('DATABASE__TYPE') == 'MEMORY') {
 			return new ServerPersistMemoryAsync();
 		}
 
-		if (appConfig.databases.main.type !== 'mongodb') {
-			throw 'Only "memory" and "mongodb" supported for data storage right now';
+		if (getConfiguration('DATABASE__TYPE') == 'MONGODB') {
+			var mongoskinConnection = mongoskin.db(
+				'mongodb://' +
+				getConfiguration('DATABASE__MONGODB_HOST') + ':' +
+					getConfiguration('DATABASE__MONGODB_PORT') + '/' +
+					getConfiguration('DATABASE__MONGODB_DATABASE'),
+				{w:true}
+			);
+			return new ServerPersistMongodb(
+				function(v) { return JSON.parse(JSON.stringify(v)); },
+				mongoskinConnection,
+				mongoskin.ObjectID,
+				getConfiguration('SYNCIT__COLLECTION'),
+				function() {}
+			);
 		}
 
-		var mongoskinConnection = mongoskin.db(
-			'mongodb://' +
-				appConfig.databases.main.host + ':' +
-				appConfig.databases.main.port + '/' +
-				appConfig.databases.main.name,
-			{w:true}
-		);
-
-		return new ServerPersistMongodb(
-			function(v) { return JSON.parse(JSON.stringify(v)); },
-			mongoskinConnection,
-			mongoskin.ObjectID,
-			appConfig.syncit.data_collection,
-			function() {}
-		);
+		throw new Error('Only "memory" and "mongodb" supported for data storage right now');
 	}()),
 	http = require('http'),
 	sseCommunication = new SseCommunication(),
@@ -60,7 +65,7 @@ var express = require('express'),
 (function(mode) {
 	"use strict";
 	/* global __dirname: false */
-	app.set('port', appConfig.http.port);
+	app.set('port', getConfiguration('HTTP__PORT'));
 	app.set('views', path.join(__dirname, 'views'));
 	app.set('view engine', 'jade');
 	app.use(express.favicon());
@@ -101,7 +106,7 @@ var statusCodesObj = (function(data) {
 var getStatusCode = function(status) {
 	"use strict";
 	if (!statusCodesObj.hasOwnProperty(status)) {
-		throw "Could not find status code for status '" + status + "'";
+		throw new Error("Could not find status code for status '" + status + "'");
 	}
 	return statusCodesObj[status];
 };
@@ -133,8 +138,8 @@ app.get('/syncit/change/:s/:k/:v', function(req, res, next) {
 app.get('/', function(req, res) {
 	"use strict";
 	res.render('front', {
-		production: ( app.get('env') === 'production' ? true : false),
-		persistData: appConfig.databases.main.type === 'memory' ? false : true
+		production: (app.get('env') === 'production' ? true : false),
+		persistData: (nonPersistentDatabases.indexOf(getConfiguration('DATABASE__TYPE')) > -1)
 	});
 });
 
@@ -178,8 +183,8 @@ referenceServer.listenForFed(function(seqId, dataset, datakey, queueitem, newVal
 var serverHttp = null;
 
 serverHttp = http.createServer(app);
-serverHttp.listen(appConfig.http.port, function(){
+serverHttp.listen(getConfiguration('HTTP__PORT'), function(){
 	"use strict";
 	/* global console: false */
-	console.log('Express HTTP server listening on port ' + appConfig.http.port);
+	console.log('Express HTTP server listening on port ' + getConfiguration('HTTP__PORT'));
 });
