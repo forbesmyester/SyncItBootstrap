@@ -15,6 +15,7 @@
     "ini": "^1.2.1",
     "jade": "~1.1.4",
     "jshint": "~2.4.4",
+    "localforage": "^1.2.2",
     "mongoskin": "^1.4.1",
     "mout": "^0.9.1",
     "reqwest": "^1.1.0",

@@ -139,7 +139,7 @@ app.get('/', function(req, res) {
 	"use strict";
 	res.render('front', {
 		production: (app.get('env') === 'production' ? true : false),
-		persistData: (nonPersistentDatabases.indexOf(getConfiguration('DATABASE__TYPE')) > -1)
+		persistData: (nonPersistentDatabases.indexOf(getConfiguration('DATABASE__TYPE')) == -1)
 	});
 });
 

@@ -3,6 +3,8 @@ module.exports = (function(
 	SyncItBuffer,
 	FakeLocalStorage,
 	AsyncLocalStorage,
+	localForage,
+	SyncItLocalForage,
 	getTLIdEncoderDecoder,
 	Path_AsyncLocalStorage,
 	dontListLocallyDeletedDatakeys,
@@ -55,14 +57,31 @@ module.exports = (function(
 		return this._asyncLocalStorage[name];
 	};
 
+	Factory.prototype._getPersistance = function(storageType, name) {
+
+		if (storageType == 'localForage') {
+			return new Path_AsyncLocalStorage(
+				new SyncItLocalForage(
+					localForage,
+					name,
+					JSON.stringify,
+					JSON.parse
+				),
+				this.getTLIdEncoderDecoder()
+			);
+		}
+
+		return new Path_AsyncLocalStorage(
+			this.getAsyncLocalStorage(name),
+			this.getTLIdEncoderDecoder()
+		);
+
+	};
+
 	Factory.prototype.getSyncIt = function(deviceId) {
 		if (this._syncIt) { return this._syncIt; }
 
-
-		var pathstore = new Path_AsyncLocalStorage(
-			this._getAsyncLocalStorage('syncit'),
-			this.getTLIdEncoderDecoder()
-		);
+		var pathstore = this._getPersistance('localForage', 'siac');
 
 		this._syncIt = new SyncItBuffer(dontListLocallyDeletedDatakeys(new SyncIt(pathstore, deviceId)));
 
@@ -117,6 +136,8 @@ module.exports = (function(
 	require('sync-it/SyncItBuffer'),
 	require('sync-it/FakeLocalStorage'),
 	require('sync-it/AsyncLocalStorage'),
+	require('localforage'),
+	require('sync-it/LocalForage'),
 	require('get_tlid_encoder_decoder'),
 	require('sync-it/Path/AsyncLocalStorage'),
 	require('sync-it/dontListLocallyDeletedDatakeys'),

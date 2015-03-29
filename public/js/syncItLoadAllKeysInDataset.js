@@ -1,4 +1,4 @@
-module.exports = (function(when, syncItCallbackToPromise, arrayMap, getSyncItCallbackConverter, rekey) {
+module.exports = (function(when, syncItCallbackToPromise, arrayMap, rekey) {
 	
 	"use strict";
 	
@@ -28,4 +28,4 @@ module.exports = (function(when, syncItCallbackToPromise, arrayMap, getSyncItCal
 		});
 	};
 	
-}(require('when'), require('sync-it/syncItCallbackToPromise'), require('mout/array/map'), require('./getSyncItCallbackConverter'), require('./rekey')));
+}(require('when'), require('sync-it/syncItCallbackToPromise'), require('mout/array/map'), require('./rekey')));
