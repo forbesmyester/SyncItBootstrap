@@ -1,6 +1,6 @@
 {
   "name": "SyncItTodoMvc",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "dependencies": {
     "todomvc-common": "~0.1.7",
     "react": "~0.10.0"
