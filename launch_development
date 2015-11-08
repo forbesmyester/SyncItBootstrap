@@ -2,6 +2,8 @@
 
 # Bring in configuration data
 . ./config_rc
+npm --loglevel=win install
+node_modules/.bin/bower --config.interactive=false -s -f install
 
 # Launch
 node app.js
